@@ -28,7 +28,7 @@ print_message "
  |______\____/|_|  \_\_____|_| \_| |_|    |______/_/    \_\_|  /_____|
 " "${GREEN}"
 
-print_message "            Pyrodactyl Installer - Ubuntu 204 Edition" "${YELLOW}"
+print_message "            Pyrodactyl Installer - Ubuntu 24.04 Edition" "${YELLOW}"
 print_message "            Fixed Version - Compatible with all errors" "${BLUE}"
 echo ""
 
@@ -191,3 +191,4 @@ print_message "🔧 To create another admin user later:" "${BLUE}"
 print_message "   cd ~/pyrodactyl-panel && sudo docker compose exec panel php artisan p:user:make" "${NC}"
 print_message "" "${NC}"
 print_message "══════════════════════════════════════════════" "${GREEN}"
+
