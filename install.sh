@@ -1,194 +1,174 @@
 #!/bin/bash
 
-# Pyrodactyl Installer for Ubuntu 24.04
-# Fixed version with all error handling
+# Pyrodactyl Installer - GitHub Ready
+# By Lorinplayz.dev
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-# Function to print colored output
-print_message() {
-    echo -e "${2}${1}${NC}"
-}
+# Check if running as root
+if [ "$EUID" -eq 0 ]; then 
+    echo -e "${RED}❌ Please do not run this script as root directly${NC}"
+    echo -e "${YELLOW}   Run it as a normal user with sudo privileges${NC}"
+    exit 1
+fi
 
 # Clear screen
 clear
 
 # Banner
-print_message "
-  _      ____  _____  _____ _   _   _____  _           __     ________
- | |    / __ \|  __ \|_   _| \ | | |  __ \| |        /\\ \\   / /___  /
- | |   | |  | | |__) | | | |  \| | | |__) | |       /  \\ \\_/ /   / / 
- | |   | |  | |  _  /  | | | . \` | |  ___/| |      / /\ \\   /   / /  
- | |___| |__| | | \ \ _| |_| |\  | | |    | |____ / ____ \| |   / /__ 
- |______\____/|_|  \_\_____|_| \_| |_|    |______/_/    \_\_|  /_____|
-" "${GREEN}"
-
-print_message "            Pyrodactyl Installer - By @Lorinplayz" "${YELLOW}"
-print_message "            Fixed Version - Compatible with all errors" "${BLUE}"
+echo -e "${GREEN}"
+echo "  _      ____  _____  _____ _   _   _____  _           __     ________"
+echo " | |    / __ \|  __ \|_   _| \ | | |  __ \| |        /\\ \\   / /___  /"
+echo " | |   | |  | | |__) | | | |  \| | | |__) | |       /  \\ \\_/ /   / / "
+echo " | |   | |  | |  _  /  | | | . \` | |  ___/| |      / /\ \\   /   / /  "
+echo " | |___| |__| | | \ \ _| |_| |\  | | |    | |____ / ____ \| |   / /__ "
+echo " |______\____/|_|  \_\_____|_| \_| |_|    |______/_/    \_\_|  /_____|"
+echo -e "${NC}"
+echo -e "${YELLOW}            Pyrodactyl Installer - GitHub Edition${NC}"
+echo -e "${BLUE}            Made By: Lorinplayz.dev${NC}"
 echo ""
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-    print_message "❌ Please do not run this script as root directly" "${RED}"
-    print_message "   Run it as a normal user with sudo privileges" "${YELLOW}"
-    exit 1
-fi
+# Auto-fix function
+fix_docker_issues() {
+    echo -e "${YELLOW}🔧 Fixing Docker issues...${NC}"
+    sudo systemctl stop docker 2>/dev/null
+    sudo apt remove -y docker docker-engine docker.io containerd runc docker-ce docker-ce-cli containerd.io docker-compose-plugin 2>/dev/null
+    sudo apt autoremove -y 2>/dev/null
+    sudo rm -rf /var/lib/docker /etc/docker
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -aG docker $USER
+}
 
-# Step 1: Update system
-print_message "[1/9] Updating system packages..." "${GREEN}"
+# Auto-fix YAML function
+fix_yaml() {
+    echo -e "${YELLOW}🔧 Fixing YAML configuration...${NC}"
+    cd ~/pyrodactyl-panel 2>/dev/null || mkdir -p ~/pyrodactyl-panel && cd ~/pyrodactyl-panel
+    cat > docker-compose.yml << 'EOF'
+version: '3.8'
+
+x-common:
+  &common
+  image: ghcr.io/pyrodactyl-oss/pyrodactyl:latest
+  networks:
+    - pyrodactyl
+  environment:
+    APP_URL: "http://SERVER_IP_PLACEHOLDER"
+    APP_TIMEZONE: "UTC"
+    APP_ENVIRONMENT_ONLY: "false"
+    DB_HOST: database
+    DB_PORT: 3306
+    DB_DATABASE: panel
+    DB_USERNAME: pyrodactyl
+    DB_PASSWORD: "SecurePass123!"
+    CACHE_DRIVER: redis
+    SESSION_DRIVER: redis
+    QUEUE_CONNECTION: redis
+    REDIS_HOST: cache
+    REDIS_PASSWORD: "SecureRedis123!"
+    REDIS_PORT: 6379
+
+services:
+  database:
+    image: mariadb:10.11
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - /var/lib/pyrodactyl/database:/var/lib/mysql
+    networks:
+      - pyrodactyl
+    environment:
+      MYSQL_ROOT_PASSWORD: "RootPass123!"
+      MYSQL_DATABASE: panel
+      MYSQL_USER: pyrodactyl
+      MYSQL_PASSWORD: "SecurePass123!"
+
+  cache:
+    image: redis:alpine
+    restart: always
+    command: redis-server --requirepass "SecureRedis123!"
+    volumes:
+      - /var/lib/pyrodactyl/redis:/data
+    networks:
+      - pyrodactyl
+
+  panel:
+    <<: *common
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - /var/lib/pyrodactyl/panel/var:/app/var
+      - /var/lib/pyrodactyl/panel/logs:/app/storage/logs
+      - /var/lib/pyrodactyl/panel/nginx:/etc/nginx/http.d
+      - /var/lib/pyrodactyl/panel/ssl:/etc/letsencrypt
+    depends_on:
+      - database
+      - cache
+
+networks:
+  pyrodactyl:
+    driver: bridge
+EOF
+}
+
+# Main installation
+echo -e "${GREEN}[1/6] Updating system...${NC}"
 sudo apt update -y
 
-# Step 2: Remove old Docker installations
-print_message "[2/9] Removing old Docker installations..." "${GREEN}"
-sudo apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+echo -e "${GREEN}[2/6] Installing Docker...${NC}"
+if ! command -v docker &> /dev/null; then
+    fix_docker_issues
+else
+    echo -e "${GREEN}✅ Docker already installed${NC}"
+fi
 
-# Step 3: Install Docker
-print_message "[3/9] Installing Docker..." "${GREEN}"
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Step 4: Install Docker Compose Plugin
-print_message "[4/9] Installing Docker Compose plugin..." "${GREEN}"
-sudo apt install -y docker-compose-plugin
-
-# Step 5: Start and enable Docker
-print_message "[5/9] Starting Docker service..." "${GREEN}"
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Step 6: Add user to docker group
-print_message "[6/9] Adding user to docker group..." "${GREEN}"
-sudo usermod -aG docker $USER
-
-# Step 7: Create directory and download compose file
-print_message "[7/9] Setting up Pyrodactyl panel..." "${GREEN}"
+echo -e "${GREEN}[3/6] Setting up Pyrodactyl...${NC}"
 mkdir -p ~/pyrodactyl-panel
 cd ~/pyrodactyl-panel
 
-# Download compose file
-curl -Lo docker-compose.yml https://raw.githubusercontent.com/pyrohost/pyrodactyl/main/docker-compose.example.yml
-
 # Get server IP
-SERVER_IP=$(curl -s ifconfig.me)
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
 
-# Step 8: Guide user to edit config
-print_message "[8/9] Configuration Setup" "${YELLOW}"
-print_message "=========================================" "${BLUE}"
-print_message "Please change the following in docker-compose.yml:" "${YELLOW}"
-print_message "  - APP_URL: Change to ${GREEN}http://$SERVER_IP${NC}" "${NC}"
-print_message "  - DB_PASSWORD: Set a secure password" "${NC}"
-print_message "  - REDIS_PASSWORD: Set a secure password" "${NC}"
-print_message "=========================================" "${BLUE}"
-echo ""
+# Create YAML with proper IP
+fix_yaml
+sed -i "s|SERVER_IP_PLACEHOLDER|$SERVER_IP|g" docker-compose.yml
 
-# Ask user if they want to edit now
-read -p "Do you want to edit the configuration file now? (y/n): " -n 1 -r
-echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # Check if nano is installed
-    if ! command -v nano &> /dev/null; then
-        sudo apt install -y nano
-    fi
-    nano docker-compose.yml
-else
-    print_message "You can edit it later with: nano ~/pyrodactyl-panel/docker-compose.yml" "${YELLOW}"
-fi
-
-# Step 9: Start the panel
-print_message "[9/9] Starting Pyrodactyl panel..." "${GREEN}"
-
-# Try with sudo first (most reliable method)
-print_message "Starting with sudo (most reliable)..." "${BLUE}"
-cd ~/pyrodactyl-panel
-
-# Check if docker-compose.yml exists
-if [ ! -f docker-compose.yml ]; then
-    print_message "❌ docker-compose.yml not found!" "${RED}"
-    exit 1
-fi
-
-# Start containers with sudo
+echo -e "${GREEN}[4/6] Starting containers...${NC}"
 sudo docker compose up -d
 
-if [ $? -eq 0 ]; then
-    print_message "✅ Panel started successfully with sudo!" "${GREEN}"
-    
-    # Wait for database
-    print_message "Waiting 15 seconds for database to initialize..." "${YELLOW}"
-    sleep 15
-    
-    # Create admin user
-    print_message "Creating admin user..." "${GREEN}"
-    sudo docker compose exec panel php artisan p:user:make
-    
-    # Show status
-    print_message "Panel status:" "${BLUE}"
-    sudo docker compose ps
-else
-    print_message "❌ Failed to start with sudo. Trying without sudo..." "${YELLOW}"
-    
-    # Try without sudo
-    docker compose up -d
-    
-    if [ $? -eq 0 ]; then
-        print_message "✅ Panel started successfully!" "${GREEN}"
-        
-        # Wait for database
-        print_message "Waiting 15 seconds for database to initialize..." "${YELLOW}"
-        sleep 15
-        
-        # Create admin user
-        print_message "Creating admin user..." "${GREEN}"
-        docker compose exec panel php artisan p:user:make
-        
-        # Show status
-        print_message "Panel status:" "${BLUE}"
-        docker compose ps
-    else
-        print_message "❌ Failed to start panel." "${RED}"
-        print_message "Trying one more method with full paths..." "${YELLOW}"
-        
-        # Try with docker-compose (hyphen) instead of docker compose
-        sudo docker-compose up -d 2>/dev/null || docker-compose up -d 2>/dev/null
-        
-        if [ $? -eq 0 ]; then
-            print_message "✅ Panel started with docker-compose!" "${GREEN}"
-            sleep 15
-            sudo docker-compose exec panel php artisan p:user:make 2>/dev/null || docker-compose exec panel php artisan p:user:make
-        else
-            print_message "❌ All methods failed. Please check Docker installation." "${RED}"
-            exit 1
-        fi
-    fi
+if [ $? -ne 0 ]; then
+    echo -e "${YELLOW}⚠️ First attempt failed, trying with sudo docker-compose...${NC}"
+    sudo docker-compose up -d
 fi
 
-# Final instructions
-print_message "" "${NC}"
-print_message "══════════════════════════════════════════════" "${GREEN}"
-print_message "✅ INSTALLATION COMPLETE!" "${GREEN}"
-print_message "══════════════════════════════════════════════" "${GREEN}"
-print_message "" "${NC}"
-print_message "📱 Your panel is running at: ${GREEN}http://$SERVER_IP:8080${NC}" "${NC}"
-print_message "" "${NC}"
-print_message "📝 USEFUL COMMANDS:" "${BLUE}"
-print_message "   cd ~/pyrodactyl-panel" "${NC}"
-print_message "   sudo docker compose ps              # Check status" "${NC}"
-print_message "   sudo docker compose logs panel       # View logs" "${NC}"
-print_message "   sudo docker compose restart          # Restart panel" "${NC}"
-print_message "   sudo docker compose down             # Stop panel" "${NC}"
-print_message "" "${NC}"
-print_message "⚠️  IF YOU GET PERMISSION ERRORS:" "${YELLOW}"
-print_message "   Option 1: Logout and login again, then use commands WITHOUT sudo" "${NC}"
-print_message "   Option 2: Continue using sudo with all docker commands" "${NC}"
-print_message "   Option 3: Reboot the server: sudo reboot" "${NC}"
-print_message "" "${NC}"
-print_message "🔧 To create another admin user later:" "${BLUE}"
-print_message "   cd ~/pyrodactyl-panel && sudo docker compose exec panel php artisan p:user:make" "${NC}"
-print_message "" "${NC}"
-print_message "══════════════════════════════════════════════" "${GREEN}"
+echo -e "${GREEN}[5/6] Waiting for database...${NC}"
+sleep 15
 
+echo -e "${GREEN}[6/6] Creating admin user...${NC}"
+sudo docker compose exec panel php artisan p:user:make 2>/dev/null || sudo docker-compose exec panel php artisan p:user:make 2>/dev/null
+
+# Final output
+echo ""
+echo -e "${GREEN}══════════════════════════════════════════════${NC}"
+echo -e "${GREEN}✅ INSTALLATION COMPLETE!${NC}"
+echo -e "${GREEN}══════════════════════════════════════════════${NC}"
+echo -e "${CYAN}📱 Panel URL: ${GREEN}http://$SERVER_IP:8080${NC}"
+echo -e "${CYAN}📱 Ubuntu Version: $(lsb_release -rs)${NC}"
+echo ""
+echo -e "${YELLOW}📝 Commands:${NC}"
+echo -e "   cd ~/pyrodactyl-panel"
+echo -e "   sudo docker compose ps"
+echo -e "   sudo docker compose logs panel"
+echo ""
+echo -e "${PURPLE}Made with ❤️  By: Lorinplayz.dev${NC}"
+echo -e "${BLUE}GitHub: https://github.com/lorinplayz/pyrodactyl-installer${NC}"
