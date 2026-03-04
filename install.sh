@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Pyrodactyl Installer - GitHub Ready
+# Pyrodactyl Installer - One Cmd
 # By Lorinplayz.dev
 
 # Colors
