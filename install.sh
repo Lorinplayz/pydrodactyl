@@ -43,7 +43,7 @@ print_message "
  |______\____/|_|  \_\_____|_| \_| |_|    |______/_/    \_\_|  /_____|
 " "${GREEN}"
 
-print_message "            Pyrodactyl Installer - Universal Edition" "${YELLOW}"
+print_message "            Pyrodactyl Installer - Lorinplayz.dev" "${YELLOW}"
 print_message "            Compatible with Ubuntu 16.04 → 24.04" "${BLUE}"
 echo ""
 
